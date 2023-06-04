@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+    <style>
+        .slider {
+            width: 600px;
+        }
+    </style>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+        <table>
+            <tr>
+              <td><label for="mu">Mu:</label></td>
+              <td><input class="slider" type="range" min="-0.05" max="0.05" step="0.0001" id="mu" value="0.003"></td>
+              <td><span id="muVal">0.3</span>%</td>
+            </tr>
+            <tr>
+              <td><label for="sigma">Sigma:</label></td>
+              <td><input class="slider" type="range" min="0" max="0.15" step="0.00005" id="sigma" value="0.007"></td>
+              <td><span id="sigmaVal">0.7</span>%</td>
+            </tr>
+            <tr>
+              <td><label for="beta">Beta:</label></td>
+              <td><input class="slider" type="range" min="0" max="5" step="0.01" id="beta" value="1.0"></td>
+              <td><span id="betaVal">1.0</span></td>
+            </tr>
+            <tr>
+                <td><label for="ptr">target/cur_price:</label></td>
+                <td><input class="slider" type="range" min="1.1" max="10" step="0.05" id="ptr" value="1.5"></td>
+                <td><span id="ptrVal"></span>x</td>
+              </tr>        
+          </table>
+
+        <div id="div0"> div0 입니다. </div>
+        <canvas id="chart"></canvas>
+        <canvas id="chart_rnd"></canvas>
+        <script type="module">
+            import { createChart } from './createChart.js';
+            let chart = null;
+            let chartRnd = null;
+
+            // 랜덤값만 생성하는 함수를 따로 만듭니다.
+            function generateRandomValues() {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+            }
+
+            let randomValues = [];
+            // 최초 10000개의 랜덤값을 생성합니다.
+            for (let i = 0; i < 100000; i++) {
+                let randomValue = generateRandomValues();
+                randomValues.push(randomValue);
+            }
+
+
+            function generateDailyReturn(mu, sigma, beta, randomIndex) {
+                let spReturn = randomValues[randomIndex];
+                spReturn = spReturn * sigma + mu;
+                let stockReturn = spReturn * beta;
+                return stockReturn;
+            }
+
+            document.getElementById('mu').addEventListener('input', updateChart);
+            document.getElementById('sigma').addEventListener('input', updateChart);
+            document.getElementById('beta').addEventListener('input', updateChart);
+            document.getElementById('ptr').addEventListener('input', updateChart);
+
+
+            function updateChart() {
+                const mu = parseFloat(document.getElementById('mu').value);
+                document.getElementById('muVal').textContent = (mu * 100).toFixed(2);
+                const sigma = parseFloat(document.getElementById('sigma').value);
+                document.getElementById('sigmaVal').textContent = (sigma * 100).toFixed(2);
+                const beta = parseFloat(document.getElementById('beta').value);
+                document.getElementById('betaVal').textContent = beta.toFixed(2);
+                const ptr = parseFloat(document.getElementById('ptr').value);
+                document.getElementById('ptrVal').textContent = ' ' + ptr.toFixed(2);
+
+
+                let dailyReturns = [];
+                for (let i = 0; i < 2000; i++) {
+                    let dailyReturn = generateDailyReturn(mu, sigma, beta, i);
+                    dailyReturns.push(dailyReturn);
+                }
+
+                let price = 1.0;
+                let rate = 2.0/100.0;
+                let target = ptr * price;
+                let leverage = 1.5;
+                let price2 = price;
+
+                let target_index = 0;
+                let priceHistory1 = [];
+                let priceHistory2 = [];
+
+                let volHistory1 = [];
+                let volHistory2 = [];
+                for(let i = 0; i < 2000; i++) {
+                    let cur_rate = dailyReturns[i];
+                    volHistory1.push(cur_rate*100.0);
+                    price *= (1.0 + cur_rate);
+                    priceHistory1.push(price);
+
+                    if(target < price) {
+                        target_index = i;
+                        break;
+                    }
+                    target_index++;
+                }
+
+                for(let i = 0; i < target_index; i++) {
+                    let cur_rate = dailyReturns[i] * leverage;
+                    volHistory2.push(cur_rate * 100);
+                    price2 *= (1.0 + cur_rate);
+                    priceHistory2.push(price2);
+                }
+
+                document.getElementById('div0').textContent = 'lev1: ' + price.toFixed(3) + '\nlev1.5: ' + price2.toFixed(3);
+
+                if(chart !== null){
+                    chart.destroy(); 
+                }
+                if(chartRnd != null){
+                    chartRnd.destroy(); 
+                }
+
+                const ctxRnd = document.getElementById('chart_rnd').getContext('2d');
+                chartRnd = createChart(ctxRnd, target_index, volHistory1, volHistory2, "vol 1x", "vol 1.5x");
+
+                const ctx = document.getElementById('chart').getContext('2d');
+                chart = createChart(ctx, target_index, priceHistory1, priceHistory2, "1x", "1.5x");
+
+            }
+
+            window.onload = updateChart;
+        </script>
+    </body>
+</html>
